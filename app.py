@@ -447,6 +447,7 @@ else:
 
 if page == "Home":
     st.title("Welcome to the Microplastic Pollution Risk Assessment System")
+    st.warning("The use_column_width parameter has been deprecated and will be removed in a future release. Please utilize the use_container_width parameter instead.") # Address Deprecation Warning
     st.image("https://via.placeholder.com/700x300.png?text=Environmental+Sustainability", use_container_width=True) 
     st.markdown("""
         <p style='font-size: 1.1em;'>
@@ -657,10 +658,12 @@ elif page == "Prediction Dashboard":
                 report_df = pd.DataFrame(st.session_state['model_report']['classification_report']).transpose().round(2)
                 st.dataframe(report_df.drop(columns=['support'], errors='ignore'))
             
-    else:
-        st.info("Train the model first to see the scorecard and results.")
+        else:
+             # FIX: This handles the case where DF is loaded but model hasn't been run or failed.
+             st.info("Train the model first to see the scorecard and results.")
 
     else:
+        # This handles the case where DF hasn't been uploaded yet.
         st.warning("Please upload and preprocess a dataset on the 'Upload Dataset' page first.")
 
 
