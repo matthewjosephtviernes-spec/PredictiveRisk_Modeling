@@ -10,7 +10,9 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import matplotlib.pyplot as plt
 import seaborn as sns
 from io import BytesIO
-from fpdf import FPDF # You'll need to install fpdf: pip install fpdf
+from fpdf import FPDF  # pip install fpdf
+import tempfile
+import os
 
 # --- Configuration ---
 st.set_page_config(
@@ -112,19 +114,27 @@ def train_model(df, target_column, features, model_type):
         return None, None, None
 
     X = df[features]
-    y = df[target_column]
+    y = df[target_column].copy()
 
-    # Ensure target column is numerical for classification
+    # Ensure target column is numerical for classification; else convert
     if not pd.api.types.is_numeric_dtype(y):
         try:
-            y = pd.Categorical(y, categories=['Low', 'Medium', 'High'], ordered=True).codes
-            st.info(f"Target column '{target_column}' converted to numerical categories: 0=Low, 1=Medium, 2=High.")
-        except:
-            st.error(f"Could not convert target column '{target_column}' to numerical categories.")
+            # Try to convert to categorical codes (generic)
+            y_cat = pd.Categorical(y)
+            y = y_cat.codes
+            # store mapping for potential reverse mapping (useful later)
+            label_mapping = {i: label for i, label in enumerate(y_cat.categories)}
+            st.info(f"Converted target column '{target_column}' to numeric codes. Label mapping: {label_mapping}")
+        except Exception as e:
+            st.error(f"Could not convert target column '{target_column}' to numerical categories. Error: {e}")
             return None, None, None
+    else:
+        label_mapping = None
 
+    # safe stratify: only if more than 1 class present
+    stratify_arg = y if len(np.unique(y)) > 1 else None
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y if len(y.unique()) > 1 else None)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=stratify_arg)
 
     model = None
     if model_type == "Random Forest":
@@ -148,14 +158,29 @@ def train_model(df, target_column, features, model_type):
         st.write(f"Recall: {recall:.2f}")
         st.write(f"F1-Score: {f1:.2f}")
 
-        # Store results for reporting
+        # Build target names dynamically so classification_report doesn't crash
+        unique_labels = np.unique(y_test)
+        # If we have a label mapping (from categorical conversion), use readable names
+        if label_mapping:
+            target_names = [str(label_mapping[int(cl)]) for cl in unique_labels]
+        else:
+            target_names = [str(cl) for cl in unique_labels]
+
+        # Store results for reporting (classification_report -> output_dict)
+        try:
+            class_rep = classification_report(y_test, y_pred, target_names=target_names, output_dict=True)
+        except Exception:
+            # fallback: don't pass target_names to avoid possible mismatch
+            class_rep = classification_report(y_test, y_pred, output_dict=True)
+
         st.session_state['model_report'] = {
             'model_type': model_type,
             'accuracy': accuracy,
             'precision': precision,
             'recall': recall,
             'f1_score': f1,
-            'classification_report': classification_report(y_test, y_pred, target_names=['Low', 'Medium', 'High'], output_dict=True)
+            'classification_report': class_rep,
+            'label_mapping': label_mapping  # may be None
         }
         return model, X_test, y_test
     return None, None, None
@@ -192,29 +217,56 @@ def generate_report(df, predictions, model_results, plot_buffer):
         pdf.set_font("Arial", "B", 12)
         pdf.cell(0, 7, "Classification Report:", 0, 1)
         pdf.set_font("Arial", "", 10)
+
         for class_name, metrics in model_results['classification_report'].items():
-            if isinstance(metrics, dict): # For 'Low', 'Medium', 'High'
-                pdf.cell(0, 5, f"  {class_name}: Precision={metrics['precision']:.2f}, Recall={metrics['recall']:.2f}, F1-score={metrics['f1-score']:.2f}, Support={metrics['support']}", 0, 1)
-            else: # For 'accuracy', 'macro avg', 'weighted avg'
-                pdf.cell(0, 5, f"  {class_name}: {metrics:.2f}", 0, 1)
+            if isinstance(metrics, dict):  # For class rows like 'Low', 'Medium', 'High'
+                prec = metrics.get('precision', 0.0)
+                rec = metrics.get('recall', 0.0)
+                f1s = metrics.get('f1-score', 0.0)
+                sup = metrics.get('support', 0)
+                pdf.cell(0, 5, f"  {class_name}: Precision={prec:.2f}, Recall={rec:.2f}, F1-score={f1s:.2f}, Support={sup}", 0, 1)
+            else:  # For aggregated metrics like 'accuracy', 'macro avg', 'weighted avg'
+                # metrics may be a float or dict; handle float
+                if isinstance(metrics, (int, float)):
+                    pdf.cell(0, 5, f"  {class_name}: {metrics:.2f}", 0, 1)
+                else:
+                    # if dict (macro avg etc.), print their values concisely
+                    try:
+                        pdf.cell(0, 5, f"  {class_name}: {metrics}", 0, 1)
+                    except Exception:
+                        pdf.cell(0, 5, f"  {class_name}: {str(metrics)}", 0, 1)
         pdf.ln(5)
 
     if plot_buffer:
-        pdf.set_font("Arial", "B", 14)
-        pdf.cell(0, 10, "3. Visualizations and Risk Map", 0, 1)
-        pdf.ln(2)
-        # Assuming the plot buffer contains a PNG image
-        pdf.image(plot_buffer, x=10, y=pdf.get_y(), w=190)
-        pdf.ln(10)
+        # plot_buffer is expected to be bytes (PNG). FPDF cannot take raw bytes directly,
+        # so write to a temporary file and provide its path to pdf.image()
+        try:
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+            tmp.write(plot_buffer)
+            tmp.flush()
+            tmp.close()
+            pdf.set_font("Arial", "B", 14)
+            pdf.cell(0, 10, "3. Visualizations and Risk Map", 0, 1)
+            pdf.ln(2)
+            # place image at current y
+            y_pos = pdf.get_y()
+            pdf.image(tmp.name, x=10, y=y_pos, w=190)
+            pdf.ln(10)
+        finally:
+            # remove temp file if it exists
+            try:
+                if os.path.exists(tmp.name):
+                    os.remove(tmp.name)
+            except Exception:
+                pass
 
     pdf.set_font("Arial", "B", 14)
     pdf.cell(0, 10, "4. Identified High-Risk Zones & Mitigation Strategies", 0, 1)
     pdf.set_font("Arial", "", 12)
-    # This part would require more sophisticated logic to identify actual high-risk zones from predictions
     pdf.multi_cell(0, 7, "Based on the predictions, high-risk zones (e.g., coordinates X, Y or specific locations A, B) are identified in areas with high industrial discharge and dense population. Suggested mitigation strategies include enhanced waste management, public awareness campaigns, and stricter industrial regulations.")
     pdf.ln(10)
 
-    return pdf.output(dest='S').encode('latin-1') # Return as bytes
+    return pdf.output(dest='S').encode('latin-1')  # Return as bytes
 
 
 # --- Initialize Session State ---
@@ -265,29 +317,16 @@ else:
 
 
 # --- Main Content Area ---
-
 if page == "Home":
     st.title("Welcome to the Microplastic Pollution Risk Assessment System")
-    st.image("https://via.placeholder.com/700x300.png?text=Environmental+Sustainability", use_column_width=True) # Placeholder image
+    st.image("https://via.placeholder.com/700x300.png?text=Environmental+Sustainability", use_column_width=True)
     st.markdown("""
         <p style='font-size: 1.1em;'>
         This platform leverages advanced predictive analytics to assess and visualize the risk levels of microplastic pollution across various environments.
         Utilizing Streamlit for an interactive user experience and powerful data mining algorithms like Random Forest and XGBoost,
         we provide insights into pollution trends, potential high-risk zones, and actionable mitigation strategies.
         </p>
-        <p style='font-size: 1.1em;'>
-        Navigate through the sections to upload your data, analyze it, generate predictions, and download comprehensive reports.
-        </p>
     """, unsafe_allow_html=True)
-
-    st.subheader("Key Features:")
-    st.markdown("""
-    - **Data Upload & Preprocessing:** Seamlessly upload and clean environmental datasets.
-    - **Descriptive Analytics:** Understand your data with interactive charts and statistics.
-    - **Predictive Modeling:** Classify microplastic pollution risk (Low, Medium, High).
-    - **Interactive Dashboards:** Visualize pollution intensity with heatmaps and time-series graphs.
-    - **Comprehensive Reporting:** Download detailed reports in PDF or Excel.
-    """)
 
 elif page == "Upload Dataset":
     st.title("Upload Your Environmental Dataset")
@@ -302,7 +341,7 @@ elif page == "Upload Dataset":
             if st.session_state['df'] is not None:
                 st.write("Original Data Preview:")
                 st.dataframe(st.session_state['df'].head())
-                st.session_state['processed_df'] = preprocess_data(st.session_state['df'].copy()) # Pass a copy
+                st.session_state['processed_df'] = preprocess_data(st.session_state['df'].copy())
 
                 if st.session_state['processed_df'] is not None:
                     st.success("Dataset loaded and preprocessed successfully!")
@@ -331,7 +370,6 @@ elif page == "Data Analysis":
             st.plotly_chart(fig, use_container_width=True)
 
         st.subheader("Correlation Matrix")
-        # Select only numeric columns for correlation
         numeric_df = df.select_dtypes(include=np.number)
         if not numeric_df.empty:
             fig_corr = px.imshow(numeric_df.corr(), text_auto=True, aspect="auto",
@@ -342,11 +380,10 @@ elif page == "Data Analysis":
             st.info("No numeric columns found for correlation analysis.")
 
         st.subheader("Time-series Trends (if temporal data is available)")
-        if st.session_state['temporal_col'] and st.session_state['temporal_col'] in df.columns:
+        if st.session_state.get('temporal_col') and st.session_state['temporal_col'] in df.columns:
             try:
                 df[st.session_state['temporal_col']] = pd.to_datetime(df[st.session_state['temporal_col']])
-                # Group by temporal column and average selected indicators
-                if st.session_state['pollution_indicators']:
+                if st.session_state.get('pollution_indicators'):
                     trend_df = df.groupby(st.session_state['temporal_col'])[st.session_state['pollution_indicators']].mean().reset_index()
                     fig_time = px.line(trend_df, x=st.session_state['temporal_col'], y=st.session_state['pollution_indicators'],
                                        title="Pollution Indicator Trends Over Time")
@@ -371,6 +408,8 @@ elif page == "Prediction Dashboard":
         target_column_options = df.columns.tolist()
         # Filter out potential ID columns or non-numeric for target
         target_column_options = [col for col in target_column_options if df[col].nunique() <= 5 or not pd.api.types.is_numeric_dtype(df[col])]
+        if not target_column_options:
+            st.warning("No suitable target columns detected. Please check your data.")
         target_column = st.selectbox("Select Target Variable (e.g., 'Risk_Level')", target_column_options)
 
         # Automatically exclude target column from features list
@@ -383,20 +422,21 @@ elif page == "Prediction Dashboard":
             if target_column and feature_columns:
                 with st.spinner(f"Training {model_type} model..."):
                     model, X_test, y_test = train_model(df.copy(), target_column, feature_columns, model_type)
-                    if model:
+                    if model is not None:
                         st.session_state['model'] = model
                         st.session_state['test_data'] = X_test
                         st.session_state['test_labels'] = y_test
 
-                        # Convert predictions back to labels for display if target was categorical
+                        # Convert predictions back to labels for display if original target was categorical
                         raw_predictions = model.predict(X_test)
-                        if pd.api.types.is_numeric_dtype(df[target_column]): # If target was originally numeric
-                             st.session_state['predictions'] = raw_predictions # Keep as numeric
-                        else: # If target was categorical (converted to 0,1,2)
-                             # Create a mapping from numeric to original labels
-                             unique_labels = sorted(df[target_column].unique())
-                             label_mapping = {i: label for i, label in enumerate(unique_labels)}
-                             st.session_state['predictions'] = pd.Series(raw_predictions).map(label_mapping).values
+                        label_mapping = st.session_state.get('model_report', {}).get('label_mapping')
+
+                        if label_mapping:
+                            # label_mapping: numeric_code -> original_label
+                            st.session_state['predictions'] = pd.Series(raw_predictions).map(label_mapping).values
+                        else:
+                            # keep numeric or original values as-is
+                            st.session_state['predictions'] = raw_predictions
 
                         st.success("Model trained and predictions generated!")
                     else:
@@ -404,11 +444,11 @@ elif page == "Prediction Dashboard":
             else:
                 st.warning("Please select a target variable and at least one feature.")
 
-        if st.session_state['model'] is not None and st.session_state['predictions'] is not None:
+        if st.session_state['model'] is not None and st.session_state['predictions'] is not None and st.session_state['test_data'] is not None:
             st.subheader("Prediction Results")
 
             # Create a dataframe for displaying predictions
-            prediction_df = pd.DataFrame(st.session_state['test_data'], columns=st.session_state['test_data'].columns)
+            prediction_df = st.session_state['test_data'].copy() if isinstance(st.session_state['test_data'], pd.DataFrame) else pd.DataFrame(st.session_state['test_data'])
             prediction_df['True_Risk'] = st.session_state['test_labels']
             prediction_df['Predicted_Risk'] = st.session_state['predictions']
 
@@ -416,49 +456,50 @@ elif page == "Prediction Dashboard":
             st.dataframe(prediction_df.head())
 
             st.subheader("Risk Map (Geographic Heatmap)")
-            if st.session_state.get('location_col') and 'latitude' in df.columns and 'longitude' in df.columns: # Assuming lat/lon exist
-                # For visualization, we'll use the original dataframe but add predictions
-                # This part is complex and needs to map test data back to original locations
-                # For simplicity, let's create a dummy location and risk for demonstration
+            if st.session_state.get('location_col') and 'latitude' in df.columns and 'longitude' in df.columns:
                 plot_df = df.copy()
-                plot_df['predicted_risk_level'] = np.random.choice(['Low', 'Medium', 'High'], size=len(plot_df)) # Placeholder
+                plot_df['predicted_risk_level'] = np.random.choice(['Low', 'Medium', 'High'], size=len(plot_df))  # Placeholder
 
-                # Map risk levels to colors
                 risk_color_map = {'Low': 'green', 'Medium': 'orange', 'High': 'red'}
                 plot_df['color'] = plot_df['predicted_risk_level'].map(risk_color_map)
 
                 fig_map = px.scatter_mapbox(plot_df,
-                                            lat="latitude", # Assuming 'latitude' and 'longitude' columns
+                                            lat="latitude",
                                             lon="longitude",
                                             color="predicted_risk_level",
                                             size_max=15, zoom=3,
                                             hover_name=st.session_state['location_col'] if st.session_state['location_col'] else None,
-                                            hover_data=st.session_state['pollution_indicators'] + ['predicted_risk_level'] if st.session_state['pollution_indicators'] else ['predicted_risk_level'],
+                                            hover_data=st.session_state['pollution_indicators'] + ['predicted_risk_level'] if st.session_state.get('pollution_indicators') else ['predicted_risk_level'],
                                             color_discrete_map=risk_color_map,
                                             title="Microplastic Pollution Risk Map")
                 fig_map.update_layout(mapbox_style="open-street-map")
                 fig_map.update_layout(margin={"r":0,"t":50,"l":0,"b":0})
                 st.plotly_chart(fig_map, use_container_width=True)
 
-                # Save the plot to a buffer for PDF report
-                buf = BytesIO()
-                fig_map.write_image(buf, format="png", width=800, height=450, scale=2)
-                st.session_state['risk_map_plot_buffer'] = buf.getvalue()
+                # Save the plot to a buffer for PDF report (requires kaleido installed)
+                try:
+                    buf = BytesIO()
+                    fig_map.write_image(buf, format="png", width=800, height=450, scale=2)
+                    st.session_state['risk_map_plot_buffer'] = buf.getvalue()
+                except Exception as e:
+                    st.warning(f"Could not render map image for the PDF (kaleido might be missing). Error: {e}")
+                    st.session_state['risk_map_plot_buffer'] = None
             else:
                 st.warning("To view the risk map, ensure your dataset has 'latitude' and 'longitude' columns and a location column is selected in the sidebar.")
                 st.session_state['risk_map_plot_buffer'] = None
 
             st.subheader("Model Accuracy Scorecard")
-            if st.session_state['model_report']:
+            if st.session_state.get('model_report'):
+                mr = st.session_state['model_report']
                 st.markdown(f"""
-                - **Model Type:** {st.session_state['model_report']['model_type']}
-                - **Overall Accuracy:** <span style='color: #007bff; font-weight: bold;'>{st.session_state['model_report']['accuracy']:.2f}</span>
-                - **Weighted Precision:** {st.session_state['model_report']['precision']:.2f}
-                - **Weighted Recall:** {st.session_state['model_report']['recall']:.2f}
-                - **Weighted F1-Score:** {st.session_state['model_report']['f1_score']:.2f}
+                - **Model Type:** {mr['model_type']}
+                - **Overall Accuracy:** <span style='color: #007bff; font-weight: bold;'>{mr['accuracy']:.2f}</span>
+                - **Weighted Precision:** {mr['precision']:.2f}
+                - **Weighted Recall:** {mr['recall']:.2f}
+                - **Weighted F1-Score:** {mr['f1_score']:.2f}
                 """, unsafe_allow_html=True)
                 st.write("Classification Report:")
-                st.json(st.session_state['model_report']['classification_report'])
+                st.json(mr['classification_report'])
             else:
                 st.info("Train the model first to see the scorecard.")
 
@@ -489,18 +530,15 @@ elif page == "Reports":
 
         if st.button("Generate Excel Report (Raw Data & Predictions)"):
             with st.spinner("Generating Excel report..."):
-                # Prepare data for Excel
                 if st.session_state['test_data'] is not None:
-                    report_df = pd.DataFrame(st.session_state['test_data'])
+                    report_df = pd.DataFrame(st.session_state['test_data']).copy() if not isinstance(st.session_state['test_data'], pd.DataFrame) else st.session_state['test_data'].copy()
                     report_df['True_Risk'] = st.session_state['test_labels']
                     report_df['Predicted_Risk'] = st.session_state['predictions']
 
-                    # Save to Excel
                     excel_buffer = BytesIO()
                     with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
                         report_df.to_excel(writer, sheet_name='Predictions', index=False)
                         st.session_state['processed_df'].to_excel(writer, sheet_name='Original Data', index=False)
-                        # You can add more sheets with descriptive stats or model metrics if needed
 
                     st.download_button(
                         label="Download Excel Report",
