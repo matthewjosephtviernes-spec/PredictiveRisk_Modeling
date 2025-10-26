@@ -84,7 +84,7 @@ def load_data(uploaded_file):
     return df
 
 def preprocess_data(df):
-    """Data cleaning and preprocessing, including encoding selected non-numeric features."""
+    """Data cleaning and preprocessing, including imputation and encoding."""
     if df is None or df.empty:
         st.error("Cannot preprocess: Input DataFrame is empty.")
         st.session_state['encoded_features'] = []
@@ -96,19 +96,35 @@ def preprocess_data(df):
     df.columns = df.columns.astype(str)
     df_clean = df.copy() 
     
-    # Simple dropna and drop duplicates
-    original_rows = df.shape[0]
-    df_clean.dropna(inplace=True)
-    st.write(f"- Removed {original_rows - df_clean.shape[0]} rows with missing values.")
-
+    # --- 1. Smart Missing Value Handling (Imputation) ---
     original_rows = df_clean.shape[0]
-    df_clean.drop_duplicates(inplace=True)
-    st.write(f"- Removed {original_rows - df_clean.shape[0]} duplicate rows.")
     
-    # --- Feature Encoding for Models ---
+    # Impute Numerical Columns: Use the Median
+    numeric_cols = df_clean.select_dtypes(include=np.number).columns
+    for col in numeric_cols:
+        # Fill NaN with the median value of that column
+        if df_clean[col].isnull().any():
+            median_val = df_clean[col].median()
+            df_clean[col].fillna(median_val, inplace=True) 
+
+    # Impute Categorical Columns: Use a 'Missing' label
+    categorical_cols = df_clean.select_dtypes(include=['object', 'category']).columns
+    for col in categorical_cols:
+        # Fill NaN with a specific label 'Missing'
+        if df_clean[col].isnull().any():
+            df_clean[col].fillna('Missing', inplace=True) 
+
+    st.write(f"- Handled missing values using **Imputation** (Median for numeric, 'Missing' for categorical).")
+
+    # --- 2. Drop Duplicates ---
+    original_rows_after_impute = df_clean.shape[0]
+    df_clean.drop_duplicates(inplace=True)
+    st.write(f"- Removed {original_rows_after_impute - df_clean.shape[0]} duplicate rows.")
+    
+    # --- 3. Feature Encoding for Models ---
     features_to_encode = []
     
-    # 1. Location Column Encoding
+    # Location Column Encoding
     location_col_name = st.session_state.get('location_col') 
     if location_col_name and location_col_name in df_clean.columns and not pd.api.types.is_numeric_dtype(df_clean[location_col_name]):
         encoded_col_name = f'{location_col_name}_encoded'
@@ -119,7 +135,7 @@ def preprocess_data(df):
     else:
         st.session_state['location_encoded_col'] = location_col_name if location_col_name in df_clean.columns else None
 
-    # 2. Temporal Column Encoding
+    # Temporal Column Encoding
     temporal_col_name = st.session_state.get('temporal_col')
     if temporal_col_name and temporal_col_name in df_clean.columns and not pd.api.types.is_numeric_dtype(df_clean[temporal_col_name]):
         encoded_col_name = f'{temporal_col_name}_encoded'
@@ -127,7 +143,7 @@ def preprocess_data(df):
         features_to_encode.append(encoded_col_name)
         st.write(f"- Encoded temporal column '{temporal_col_name}' into '{encoded_col_name}'.")
     
-    # 3. Other Non-Numeric Pollution Indicators Encoding
+    # Other Non-Numeric Pollution Indicators Encoding
     indicators = st.session_state.get('pollution_indicators', [])
     for col in indicators:
         if col in df_clean.columns and not pd.api.types.is_numeric_dtype(df_clean[col]) and col not in [location_col_name, temporal_col_name]:
@@ -142,8 +158,11 @@ def preprocess_data(df):
         st.error("Processed DataFrame is empty.")
         return None
         
-    st.success("Preprocessing complete!")
+    st.success(f"Preprocessing complete! Final usable rows: {df_clean.shape[0]}")
     return df_clean
+
+# ... (train_model and run_kmeans functions remain the same as the previous correct version) ...
+# Note: They are already robust against empty data/single-class targets.
 
 def train_model(df, target_column, features, model_type):
     """Model training and evaluation (Classification)."""
@@ -447,7 +466,8 @@ else:
 
 if page == "Home":
     st.title("Welcome to the Microplastic Pollution Risk Assessment System")
-    st.warning("The use_column_width parameter has been deprecated and will be removed in a future release. Please utilize the use_container_width parameter instead.") # Address Deprecation Warning
+    # Added warning for deprecation
+    st.warning("The use_column_width parameter has been deprecated and will be removed in a future release. Please utilize the use_container_width parameter instead.")
     st.image("https://via.placeholder.com/700x300.png?text=Environmental+Sustainability", use_container_width=True) 
     st.markdown("""
         <p style='font-size: 1.1em;'>
@@ -659,7 +679,7 @@ elif page == "Prediction Dashboard":
                 st.dataframe(report_df.drop(columns=['support'], errors='ignore'))
             
         else:
-             # FIX: This handles the case where DF is loaded but model hasn't been run or failed.
+             # This handles the case where DF is loaded but model hasn't been run or failed.
              st.info("Train the model first to see the scorecard and results.")
 
     else:
