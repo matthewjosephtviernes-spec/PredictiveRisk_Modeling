@@ -1,25 +1,11 @@
-# Core app framework
-streamlit>=1.36.0
-
-# Data processing
-pandas>=2.1.0
-numpy>=1.26.0
-
-# Machine learning
-scikit-learn>=1.4.0
-xgboost>=2.0.0
-
-# Visualization
-plotly>=5.18.0
-matplotlib>=3.8.0
-seaborn>=0.13.0
-
-# PDF generation
-fpdf>=1.7.2
-
-# Excel export
-xlsxwriter>=3.1.0
-openpyxl>=3.1.0
-
-# Optional for map visualizations (Plotly image export)
-kaleido>=0.2.1
+streamlit>=1.18
+pandas>=1.5
+numpy>=1.23
+matplotlib>=3.5
+seaborn>=0.12
+scikit-learn>=1.1
+scipy>=1.7
+imbalanced-learn>=0.10
+xgboost>=1.7
+openpyxl>=3.0
+xlrd>=2.0
