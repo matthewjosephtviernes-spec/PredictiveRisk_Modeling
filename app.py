@@ -72,14 +72,69 @@ def load_dataframe(uploaded) -> pd.DataFrame:
         return None
     name = uploaded.name.lower()
     try:
-        if name.endswith(".csv"):
-            df = pd.read_csv(uploaded)
-        elif name.endswith((".xls", ".xlsx")):
+        # Excel first (pandas will handle many encodings internally)
+        if name.endswith((".xls", ".xlsx")):
+            # For Excel files use read_excel
+            uploaded.seek(0)
             df = pd.read_excel(uploaded)
+            return df
+
+        # CSV: try utf-8 first, then a small list of common encodings, then (optionally) chardet
+        elif name.endswith(".csv"):
+            uploaded.seek(0)
+            try:
+                # try the common default first
+                df = pd.read_csv(uploaded)
+                return df
+            except Exception as err_utf8:
+                # Prepare fallback encodings
+                encodings = ["utf-8", "utf-8-sig", "cp1252", "latin1", "iso-8859-1", "utf-16"]
+                for enc in encodings:
+                    try:
+                        uploaded.seek(0)
+                        # engine='python' tends to be more permissive for malformed lines
+                        df = pd.read_csv(uploaded, encoding=enc, engine="python", on_bad_lines="warn")
+                        st.warning(f"Read CSV using fallback encoding: {enc}")
+                        return df
+                    except Exception:
+                        continue
+
+                # Optional: try chardet if available to detect encoding
+                try:
+                    uploaded.seek(0)
+                    raw = uploaded.read()
+                    uploaded.seek(0)
+                    try:
+                        import chardet
+                        detect = chardet.detect(raw)
+                        enc = detect.get("encoding")
+                        if enc:
+                            try:
+                                df = pd.read_csv(io.BytesIO(raw), encoding=enc, engine="python", on_bad_lines="warn")
+                                st.warning(f"Read CSV using chardet-detected encoding: {enc}")
+                                return df
+                            except Exception as e_ch:
+                                st.warning(f"chardet detected encoding {enc} but read failed: {e_ch}")
+                    except Exception:
+                        # chardet not installed or detection failed; fall through
+                        pass
+                except Exception:
+                    pass
+
+                # Last resort: read bytes and replace undecodable bytes
+                try:
+                    uploaded.seek(0)
+                    raw_text = uploaded.read().decode("utf-8", errors="replace")
+                    uploaded.seek(0)
+                    df = pd.read_csv(io.StringIO(raw_text), engine="python", on_bad_lines="warn")
+                    st.warning("Read CSV by decoding with 'utf-8' using replacement for invalid bytes.")
+                    return df
+                except Exception as final_err:
+                    st.error(f"All attempts to read CSV failed. Last error: {final_err}")
+                    return None
         else:
             st.error("Unsupported file format. Please upload CSV or Excel.")
             return None
-        return df
     except Exception as e:
         st.error(f"Error reading file: {e}")
         return None
