@@ -14,7 +14,7 @@ from sklearn.metrics import (
 )
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.impute import SimpleImputer  # NEW
+from sklearn.impute import SimpleImputer
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -145,7 +145,7 @@ def preprocess_dataframe(df):
         if df["Risk_Type"].nunique() <= 1:
             df = df.drop(columns=["Risk_Type"])
 
-    # NEW: drop columns that are entirely NaN
+    # Drop columns that are entirely NaN
     df = df.dropna(axis=1, how="all")
 
     return df
@@ -156,7 +156,7 @@ def build_model_pipeline(model_name, numeric_features, categorical_features):
     Create a sklearn Pipeline with preprocessing + chosen classifier.
     """
 
-    # NEW: add imputers so we don't have NaN going into the model
+    # Transformers with imputers
     numeric_transformer = Pipeline(steps=[
         ("imputer", SimpleImputer(strategy="mean")),
     ])
@@ -355,33 +355,38 @@ def main():
         # Predictions
         y_pred = pipe.predict(X_test)
 
-        # Accuracy
+        # ================== TEST SET PERFORMANCE ==================
         acc = accuracy_score(y_test, y_pred)
         st.subheader("📊 Test Set Performance")
         st.write(f"**Accuracy:** {acc:.4f}")
 
-        # Classification report
+        # ---- Classification report (only for labels appearing in y_test) ----
         st.write("**Classification Report:**")
+        labels_in_test = np.unique(y_test)
+        target_names_in_test = label_encoder.inverse_transform(labels_in_test)
+
         report = classification_report(
             y_test,
             y_pred,
-            target_names=label_encoder.classes_,
-            output_dict=True
+            labels=labels_in_test,
+            target_names=target_names_in_test,
+            output_dict=True,
+            zero_division=0
         )
         report_df = pd.DataFrame(report).transpose()
         st.dataframe(report_df.style.format("{:.3f}"))
 
-        # Confusion Matrix
+        # ---- Confusion Matrix using same labels ----
         st.write("**Confusion Matrix:**")
-        cm = confusion_matrix(y_test, y_pred)
+        cm = confusion_matrix(y_test, y_pred, labels=labels_in_test)
         fig_cm, ax_cm = plt.subplots()
         sns.heatmap(
             cm,
             annot=True,
             fmt="d",
             cmap="Blues",
-            xticklabels=label_encoder.classes_,
-            yticklabels=label_encoder.classes_,
+            xticklabels=target_names_in_test,
+            yticklabels=target_names_in_test,
             ax=ax_cm
         )
         ax_cm.set_xlabel("Predicted")
@@ -428,6 +433,8 @@ def main():
 
             if hasattr(model, "feature_importances_"):
                 preprocessor = pipe.named_steps["preprocess"]
+
+                # Retrieve feature names after preprocessing
                 cat_transformer = preprocessor.named_transformers_["cat"]
                 ohe = cat_transformer.named_steps["onehot"]
                 cat_feature_names = ohe.get_feature_names_out(categorical_features)
