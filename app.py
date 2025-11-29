@@ -9,7 +9,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-st.title("Microplastic Risk Analysis — Full Preprocessing & Modeling App (Fixed Version)")
+st.title("Microplastic Risk Analysis — Full Preprocessing & Modeling App (Updated & Fixed Version)")
 
 # -----------------------------
 # File Upload Section
@@ -30,42 +30,50 @@ if uploaded_file:
     st.dataframe(df.head())
 
     # -----------------------------
-    # Outlier Handling
+    # CLEAN & CONVERT NUMERIC COLUMNS
     # -----------------------------
-    num_cols = ["MP_Count_per_L", "Risk_Score", "Microplastic_Size_mm_midpoint", "Density_midpoint"]
-    for col in num_cols:
-        if col in df.columns:
-            Q1 = df[col].quantile(0.25)
-            Q3 = df[col].quantile(0.75)
-            IQR = Q3 - Q1
-            lower = Q1 - 1.5 * IQR
-            upper = Q3 + 1.5 * IQR
-            df[col] = np.clip(df[col], lower, upper)
+    numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+
+    # Convert mixed-type numeric columns
+    for col in numeric_cols:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    # Drop rows that became NaN after conversion
+    df = df.dropna(subset=numeric_cols)
+
+    # -----------------------------
+    # Outlier Handling (IQR Method)
+    # -----------------------------
+    for col in numeric_cols:
+        Q1 = df[col].quantile(0.25)
+        Q3 = df[col].quantile(0.75)
+        IQR = Q3 - Q1
+
+        lower = Q1 - 1.5 * IQR
+        upper = Q3 + 1.5 * IQR
+
+        df = df[(df[col] >= lower) & (df[col] <= upper)]
 
     # -----------------------------
     # Skewness Transformation
     # -----------------------------
-    for col in num_cols:
-        if col in df.columns and df[col].skew() > 1:
+    for col in numeric_cols:
+        if df[col].skew() > 1:
             df[col] = np.log1p(df[col])
 
     # -----------------------------
     # Encoding Categorical Variables
     # -----------------------------
-    cat_cols = ["Location", "Shape", "Polymer_Type", "pH", "Salinity", "Industrial_Activity", 
-                "Population_Density", "Risk_Type", "Risk_Level", "Author"]
+    cat_cols = df.select_dtypes(include=['object']).columns.tolist()
 
     for col in cat_cols:
-        if col in df.columns:
-            df[col] = LabelEncoder().fit_transform(df[col].astype(str))
+        df[col] = LabelEncoder().fit_transform(df[col].astype(str))
 
     # -----------------------------
     # Feature Scaling
     # -----------------------------
     scaler = StandardScaler()
-    for col in num_cols:
-        if col in df.columns:
-            df[col] = scaler.fit_transform(df[[col]])
+    df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
 
     st.subheader("Preprocessed Dataset")
     st.dataframe(df.head())
@@ -73,8 +81,8 @@ if uploaded_file:
     # -----------------------------
     # Risk Score Distribution
     # -----------------------------
-    st.subheader("Risk Score Distribution")
     if 'Risk_Score' in df.columns:
+        st.subheader("Risk Score Distribution")
         fig, ax = plt.subplots()
         sns.histplot(df['Risk_Score'], kde=True, ax=ax)
         st.pyplot(fig)
