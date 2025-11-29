@@ -14,6 +14,7 @@ from sklearn.metrics import (
 )
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.impute import SimpleImputer  # NEW
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -42,7 +43,6 @@ def parse_range_to_mean(value):
         return float(value)
 
     value = clean_dash_chars(str(value))
-    # Split on '-'
     parts = re.split(r"-", value)
 
     nums = []
@@ -145,6 +145,9 @@ def preprocess_dataframe(df):
         if df["Risk_Type"].nunique() <= 1:
             df = df.drop(columns=["Risk_Type"])
 
+    # NEW: drop columns that are entirely NaN
+    df = df.dropna(axis=1, how="all")
+
     return df
 
 
@@ -153,10 +156,20 @@ def build_model_pipeline(model_name, numeric_features, categorical_features):
     Create a sklearn Pipeline with preprocessing + chosen classifier.
     """
 
+    # NEW: add imputers so we don't have NaN going into the model
+    numeric_transformer = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="mean")),
+    ])
+
+    categorical_transformer = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="most_frequent")),
+        ("onehot", OneHotEncoder(handle_unknown="ignore")),
+    ])
+
     preprocessor = ColumnTransformer(
         transformers=[
-            ("num", "passthrough", numeric_features),
-            ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_features),
+            ("num", numeric_transformer, numeric_features),
+            ("cat", categorical_transformer, categorical_features),
         ]
     )
 
@@ -415,8 +428,9 @@ def main():
 
             if hasattr(model, "feature_importances_"):
                 preprocessor = pipe.named_steps["preprocess"]
-                cat_ohe = preprocessor.named_transformers_["cat"]
-                cat_feature_names = cat_ohe.get_feature_names_out(categorical_features)
+                cat_transformer = preprocessor.named_transformers_["cat"]
+                ohe = cat_transformer.named_steps["onehot"]
+                cat_feature_names = ohe.get_feature_names_out(categorical_features)
                 feature_names = np.concatenate(
                     [numeric_features, cat_feature_names]
                 )
