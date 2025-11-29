@@ -42,13 +42,10 @@ def parse_range_to_mean(value):
         return float(value)
 
     value = clean_dash_chars(str(value))
-    # Keep digits, dots, minus and separators
-    # Split on '-' if exists
     parts = re.split(r"-", value)
 
     nums = []
     for p in parts:
-        # Remove non numeric/decimal chars
         p_clean = re.sub(r"[^0-9.]", "", p)
         if p_clean != "":
             try:
@@ -90,7 +87,6 @@ def expand_multi_label_column(df, column_name):
     if column_name not in df.columns:
         return df
 
-    # Get all unique labels
     labels_set = set()
     for val in df[column_name].dropna():
         parts = [p.strip() for p in str(val).split(",")]
@@ -103,7 +99,6 @@ def expand_multi_label_column(df, column_name):
             lambda x: 1 if isinstance(x, str) and label in [p.strip() for p in x.split(",")] else 0
         )
 
-    # Drop original multi-label column
     df = df.drop(columns=[column_name])
     return df
 
@@ -144,7 +139,7 @@ def preprocess_dataframe(df):
         if col in df.columns:
             df = df.drop(columns=[col])
 
-    # Optional: Risk_Type might be dropped if it is constant
+    # Optional: drop Risk_Type if constant
     if "Risk_Type" in df.columns:
         if df["Risk_Type"].nunique() <= 1:
             df = df.drop(columns=["Risk_Type"])
@@ -157,7 +152,6 @@ def build_model_pipeline(model_name, numeric_features, categorical_features):
     Create a sklearn Pipeline with preprocessing + chosen classifier.
     """
 
-    # Preprocess categorical features with OneHotEncoder
     preprocessor = ColumnTransformer(
         transformers=[
             ("num", "passthrough", numeric_features),
@@ -165,7 +159,6 @@ def build_model_pipeline(model_name, numeric_features, categorical_features):
         ]
     )
 
-    # Choose model
     if model_name == "Random Forest":
         clf = RandomForestClassifier(
             n_estimators=200,
@@ -201,9 +194,9 @@ def main():
     st.title("🌊 Microplastic Pollution Risk Classification")
     st.write(
         """
-        This app implements your thesis framework: a **predictive risk modeling** 
-        system for microplastic pollution using **classification models**.
-        Upload your dataset, preprocess it, train models, and visualize the results.
+        This app implements a predictive risk modeling framework for microplastic pollution 
+        using classification models. Upload your dataset, preprocess it, train models, 
+        and visualize the results.
         """
     )
 
@@ -211,7 +204,8 @@ def main():
     st.sidebar.header("⚙️ Settings")
     uploaded_file = st.sidebar.file_uploader("Upload CSV dataset", type=["csv"])
 
-    target_column = "Risk_Level"  # Based on your dataset
+    # Based on your dataset
+    target_column = "Risk_Level"
 
     model_choice = st.sidebar.selectbox(
         "Select Classification Model",
@@ -233,7 +227,6 @@ def main():
 
     st.subheader("📁 Raw Dataset Preview")
     st.dataframe(df_raw.head())
-
     st.write(f"**Rows:** {df_raw.shape[0]} | **Columns:** {df_raw.shape[1]}")
 
     if target_column not in df_raw.columns:
@@ -248,11 +241,23 @@ def main():
     st.dataframe(df.head())
 
     # Prepare X, y
+    if target_column not in df.columns:
+        st.error(f"Target column '{target_column}' is missing after preprocessing.")
+        return
+
     df_model = df.dropna(subset=[target_column])
+    if df_model.empty:
+        st.error("No rows with a valid target value after preprocessing.")
+        return
+
     X = df_model.drop(columns=[target_column])
     y = df_model[target_column]
 
     st.write(f"After preprocessing and dropping missing target rows: **{X.shape[0]} samples**, **{X.shape[1]} features**")
+
+    if X.shape[0] < 3:
+        st.error("Not enough samples to train a model. Need at least 3 rows.")
+        return
 
     # Identify numeric & categorical features
     numeric_features = X.select_dtypes(include=["int64", "float64"]).columns.tolist()
@@ -265,13 +270,38 @@ def main():
     label_encoder = LabelEncoder()
     y_encoded = label_encoder.fit_transform(y)
 
-    # Train/Test Split
-    test_size = 0.2
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y_encoded, test_size=test_size, random_state=42, stratify=y_encoded
-    )
-
+    # ============ FIXED TRAIN/TEST SPLIT WITH SAFE STRATIFY ============
     st.subheader("🧪 Train / Test Split")
+
+    test_size = 0.2
+
+    class_counts = pd.Series(y_encoded).value_counts()
+    st.write("**Class distribution (encoded target):**")
+    st.write(class_counts)
+
+    use_stratify = True
+    if (class_counts < 2).any():
+        st.warning(
+            "Some classes have fewer than 2 samples. "
+            "Stratified splitting is not possible; proceeding without stratify. "
+            "Consider collecting more data or balancing the classes."
+        )
+        use_stratify = False
+
+    stratify_param = y_encoded if use_stratify else None
+
+    try:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X,
+            y_encoded,
+            test_size=test_size,
+            random_state=42,
+            stratify=stratify_param
+        )
+    except ValueError as e:
+        st.error(f"Train/test split failed: {e}")
+        st.stop()
+
     st.write(f"Train size: {X_train.shape[0]} | Test size: {X_test.shape[0]}")
 
     # Build pipeline
@@ -334,18 +364,14 @@ def main():
         ax_cv.set_xlabel("Accuracy")
         st.pyplot(fig_cv)
 
-        # Feature importance (only for tree-based models)
+        # Feature importance (tree-based models only)
         st.subheader("🌟 Feature Importance (Tree-based models only)")
 
         try:
-            # Extract trained model from pipeline
             model = pipe.named_steps["model"]
 
             if hasattr(model, "feature_importances_"):
-                # Need feature names after preprocessing
                 preprocessor = pipe.named_steps["preprocess"]
-
-                # Get feature names from ColumnTransformer
                 cat_ohe = preprocessor.named_transformers_["cat"]
                 cat_feature_names = cat_ohe.get_feature_names_out(categorical_features)
                 feature_names = np.concatenate(
@@ -369,7 +395,10 @@ def main():
                 ax_imp.set_title("Top 20 Feature Importances")
                 st.pyplot(fig_imp)
             else:
-                st.info("Selected model does not provide feature_importances_. Try Random Forest or Gradient Boosting.")
+                st.info(
+                    "Selected model does not provide feature_importances_. "
+                    "Try Random Forest or Gradient Boosting to see feature importance."
+                )
         except Exception as e:
             st.warning(f"Could not compute feature importance: {e}")
 
