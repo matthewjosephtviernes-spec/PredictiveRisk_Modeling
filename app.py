@@ -42,6 +42,7 @@ def parse_range_to_mean(value):
         return float(value)
 
     value = clean_dash_chars(str(value))
+    # Split on '-'
     parts = re.split(r"-", value)
 
     nums = []
@@ -240,7 +241,7 @@ def main():
     st.write("Preview of preprocessed data:")
     st.dataframe(df.head())
 
-    # Prepare X, y
+    # ================== MODEL DATA PREP WITH RARE CLASS HANDLING ==================
     if target_column not in df.columns:
         st.error(f"Target column '{target_column}' is missing after preprocessing.")
         return
@@ -250,10 +251,35 @@ def main():
         st.error("No rows with a valid target value after preprocessing.")
         return
 
+    # Handle very rare classes (fewer than 2 samples)
+    class_counts_raw = df_model[target_column].value_counts()
+    rare_classes = class_counts_raw[class_counts_raw < 2].index.tolist()
+
+    if rare_classes:
+        st.warning(
+            f"The following classes have fewer than 2 samples and will be "
+            f"dropped from modeling: {rare_classes}. "
+            "This is necessary for reliable training, splitting, and cross-validation."
+        )
+        df_model = df_model[~df_model[target_column].isin(rare_classes)]
+
+    # After dropping rare classes, verify at least 2 classes remain
+    if df_model[target_column].nunique() < 2:
+        st.error(
+            "After removing very rare classes, there are fewer than 2 classes left. "
+            "The model cannot be trained. Consider collecting more data "
+            "or redefining your risk categories."
+        )
+        return
+
     X = df_model.drop(columns=[target_column])
     y = df_model[target_column]
 
-    st.write(f"After preprocessing and dropping missing target rows: **{X.shape[0]} samples**, **{X.shape[1]} features**")
+    st.write(
+        f"After preprocessing, dropping missing targets, and removing very rare classes: "
+        f"**{X.shape[0]} samples**, **{X.shape[1]} features**, "
+        f"**{df_model[target_column].nunique()} classes**"
+    )
 
     if X.shape[0] < 3:
         st.error("Not enough samples to train a model. Need at least 3 rows.")
@@ -270,19 +296,19 @@ def main():
     label_encoder = LabelEncoder()
     y_encoded = label_encoder.fit_transform(y)
 
-    # ============ FIXED TRAIN/TEST SPLIT WITH SAFE STRATIFY ============
+    # ================== TRAIN / TEST SPLIT (SAFE STRATIFY) ==================
     st.subheader("🧪 Train / Test Split")
 
     test_size = 0.2
 
-    class_counts = pd.Series(y_encoded).value_counts()
+    class_counts_encoded = pd.Series(y_encoded).value_counts()
     st.write("**Class distribution (encoded target):**")
-    st.write(class_counts)
+    st.write(class_counts_encoded)
 
     use_stratify = True
-    if (class_counts < 2).any():
+    if (class_counts_encoded < 2).any():
         st.warning(
-            "Some classes have fewer than 2 samples. "
+            "Some classes still have fewer than 2 samples. "
             "Stratified splitting is not possible; proceeding without stratify. "
             "Consider collecting more data or balancing the classes."
         )
@@ -349,22 +375,39 @@ def main():
         ax_cm.set_ylabel("True")
         st.pyplot(fig_cm)
 
-        # Cross-validation
+        # ================== SAFE CROSS-VALIDATION ==================
         st.subheader(f"🔁 {cv_folds}-Fold Cross-Validation on Full Dataset")
-        with st.spinner("Running cross-validation..."):
-            cv_scores = cross_val_score(pipe, X, y_encoded, cv=cv_folds, scoring="accuracy")
 
-        st.write(f"**CV Mean Accuracy:** {cv_scores.mean():.4f}")
-        st.write(f"**CV Std Dev:** {cv_scores.std():.4f}")
-        st.write("Fold-wise accuracies:", np.round(cv_scores, 4))
+        min_class_count = class_counts_encoded.min()
+        if cv_folds > min_class_count:
+            st.warning(
+                f"cv_folds ({cv_folds}) is greater than the smallest class size ({min_class_count}). "
+                f"Reducing cv_folds to {min_class_count} to allow stratified cross-validation."
+            )
+            effective_cv_folds = int(min_class_count)
+        else:
+            effective_cv_folds = cv_folds
 
-        fig_cv, ax_cv = plt.subplots()
-        ax_cv.boxplot(cv_scores, vert=False)
-        ax_cv.set_title(f"{cv_folds}-Fold CV Accuracy")
-        ax_cv.set_xlabel("Accuracy")
-        st.pyplot(fig_cv)
+        if effective_cv_folds < 2:
+            st.warning(
+                "Not enough samples per class to perform stratified cross-validation "
+                "(need at least 2 per class). Skipping CV."
+            )
+        else:
+            with st.spinner("Running cross-validation..."):
+                cv_scores = cross_val_score(pipe, X, y_encoded, cv=effective_cv_folds, scoring="accuracy")
 
-        # Feature importance (tree-based models only)
+            st.write(f"**CV Mean Accuracy:** {cv_scores.mean():.4f}")
+            st.write(f"**CV Std Dev:** {cv_scores.std():.4f}")
+            st.write("Fold-wise accuracies:", np.round(cv_scores, 4))
+
+            fig_cv, ax_cv = plt.subplots()
+            ax_cv.boxplot(cv_scores, vert=False)
+            ax_cv.set_title(f"{effective_cv_folds}-Fold CV Accuracy")
+            ax_cv.set_xlabel("Accuracy")
+            st.pyplot(fig_cv)
+
+        # ================== FEATURE IMPORTANCE (TREE MODELS) ==================
         st.subheader("🌟 Feature Importance (Tree-based models only)")
 
         try:
