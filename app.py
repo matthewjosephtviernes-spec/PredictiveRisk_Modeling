@@ -23,6 +23,7 @@ from sklearn.feature_selection import mutual_info_classif, chi2
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="sklearn.preprocessing._encoders")
 
+
 # -------------------------------------------------------
 # CONSTANTS
 # -------------------------------------------------------
@@ -448,3 +449,4 @@ def build_models_fast(fast_mode: bool):
         "Random Forest": RandomForestClassifier(n_estimators=rf_estimators, random_state=42, n_jobs=-1),
         "Gradient Boosting": GradientBoostingClassifier(random_state=42),
     }
+
