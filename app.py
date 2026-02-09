@@ -8,13 +8,16 @@ import seaborn as sns
 
 from pandas.errors import EmptyDataError, ParserError
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold, StratifiedKFold, GridSearchCV
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelEncoder
 from sklearn.impute import SimpleImputer
 
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.feature_selection import mutual_info_classif, chi2
 
 import warnings
@@ -396,21 +399,65 @@ def feature_selection_page(df_raw):
     st.write(f"Training data shape: {X_train.shape}")
     st.write(f"Test data shape: {X_test.shape}")
 
-# Run app
+# -------------------------------------------------------
+# HOME PAGE
+# -------------------------------------------------------
+def home_page():
+    st.title("Microplastic Risk Prediction – Streamlit App")
+    st.markdown(
+        """
+        This app demonstrates the analysis and modeling workflow for predicting **Risk_Type**
+        and **Risk_Level** using microplastic and environmental features.
+        """
+    )
+
+
+# -------------------------------------------------------
+# MODELING PAGE
+# -------------------------------------------------------
+def modeling_page(df_raw):
+    st.title("Classification Modeling")
+
+    st.write("Modeling details will go here...")
+    # Add logic for classification modeling like Logistic Regression, Random Forest, Gradient Boosting
+    pass
+
+
+# -------------------------------------------------------
+# CROSS VALIDATION PAGE
+# -------------------------------------------------------
+def cross_validation_page(df_raw):
+    st.title("Cross Validation (K-Fold)")
+
+    st.write("Cross-validation details will go here...")
+    # Add logic for cross-validation, etc.
+    pass
+
+
+# -------------------------------------------------------
+# APP MAIN
+# -------------------------------------------------------
 def main():
-    st.title("Microplastic Risk Prediction")
-
-    # Sidebar for navigation
     st.sidebar.title("Navigation")
-    page = st.sidebar.radio("Go to", ("Preprocessing", "Feature Selection & Relevance"))
+    page = st.sidebar.radio("Go to", ("🏠 Home", "🧼 Preprocessing", "🧠 Feature Selection & Relevance", "⚙️ Modeling", "📊 Cross Validation"))
 
-    if page == "Preprocessing":
+    if page == "🏠 Home":
+        home_page()
+
+    elif page == "🧼 Preprocessing":
         st.title("Preprocessing Page")
         data = pd.read_csv("your_dataset.csv")  # Replace with your dataset
         st.dataframe(data.head())
 
-    elif page == "Feature Selection & Relevance":
+    elif page == "🧠 Feature Selection & Relevance":
         feature_selection_page(data)
+
+    elif page == "⚙️ Modeling":
+        modeling_page(data)
+
+    elif page == "📊 Cross Validation":
+        cross_validation_page(data)
+
 
 if __name__ == "__main__":
     main()
