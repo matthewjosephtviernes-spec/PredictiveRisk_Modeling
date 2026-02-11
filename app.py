@@ -162,6 +162,11 @@ def home_page():
     # Add file upload section
     uploaded_file = st.file_uploader("Upload your dataset (CSV)", type="csv")
     
+    # Check if the dataset is already in session state
+    if 'df' in st.session_state:
+        st.write("Dataset already uploaded!")
+        st.dataframe(st.session_state.df.head())
+    
     if uploaded_file is not None:
         try:
             df_raw = load_data(uploaded_file)
