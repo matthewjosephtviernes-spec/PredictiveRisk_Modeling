@@ -135,10 +135,17 @@ def scale_features(df, numerical_cols):
 
 def transform_skewed_columns(df, numerical_cols, threshold=0.5):
     """Transform skewed columns by applying log transformation."""
-    for col in numerical_cols:
-        if df[col].skew() > threshold:
-            df[col] = np.log1p(df[col])  # Apply log1p to handle skewed distributions
-    return df
+    skewness_before = df[numerical_cols].apply(lambda x: x.skew(), axis=0)
+    
+    skewed_cols = skewness_before[skewness_before > threshold].index.tolist()
+    
+    # Apply log transformation to the skewed columns
+    for col in skewed_cols:
+        df[col] = np.log1p(df[col])  # Apply log1p to handle skewed distributions
+    
+    skewness_after = df[skewed_cols].apply(lambda x: x.skew(), axis=0)
+    
+    return df, skewness_before, skewness_after
 
 # -------------------------------------------------------
 # HOME PAGE
@@ -270,7 +277,16 @@ def preprocessing_page():
     df_cleaned = handle_outliers_iqr(df_encoded, numerical_cols)
 
     # Transform skewed columns (log transformation)
-    df_cleaned = transform_skewed_columns(df_cleaned, numerical_cols)
+    df_cleaned, skewness_before, skewness_after = transform_skewed_columns(df_cleaned, numerical_cols)
+
+    # Display skewness before and after transformation
+    st.write("Skewness of numerical columns before and after log transformation:")
+    skewness_df = pd.DataFrame({
+        'Column': skewness_before.index,
+        'Skewness Before': skewness_before.values,
+        'Skewness After': skewness_after.values
+    })
+    st.dataframe(skewness_df)
 
     # Scale numerical features
     df_scaled, scaler = scale_features(df_cleaned, numerical_cols)
