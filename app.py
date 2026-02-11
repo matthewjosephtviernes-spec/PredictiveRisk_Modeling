@@ -42,7 +42,6 @@ NUMERIC_COLS = [
     "Density_midpoint",
 ]
 
-# Removed 'Source' column
 CATEGORICAL_COLS = [
     "Location",
     "Shape",
@@ -84,22 +83,27 @@ def load_data(uploaded_file=None):
 def convert_to_numeric(df, columns):
     """Convert specified columns to numeric, coercing errors to NaN."""
     for col in columns:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+        if col in df.columns:  # Only convert if column exists
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        else:
+            st.warning(f"Column '{col}' not found in dataset.")
     return df
 
 def handle_outliers_iqr(df, numerical_cols):
     """Handle outliers using the IQR method (capping)."""
     for col in numerical_cols:
-        Q1 = df[col].quantile(0.25)
-        Q3 = df[col].quantile(0.75)
-        IQR = Q3 - Q1
+        if col in df.columns:
+            Q1 = df[col].quantile(0.25)
+            Q3 = df[col].quantile(0.75)
+            IQR = Q3 - Q1
 
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
 
-        # Cap the outliers
-        df[col] = df[col].clip(lower=lower_bound, upper=upper_bound)
-
+            # Cap the outliers
+            df[col] = df[col].clip(lower=lower_bound, upper=upper_bound)
+        else:
+            st.warning(f"Column '{col}' not found for outlier handling.")
     return df
 
 def encode_categorical(df, categorical_cols):
