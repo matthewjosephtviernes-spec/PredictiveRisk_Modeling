@@ -211,6 +211,11 @@ def preprocessing_page():
             st.write("Dataset uploaded successfully for Preprocessing!")
             st.dataframe(df_raw.head())
 
+            # Check if the required columns exist in the dataset
+            missing_columns = [col for col in ['Microplastic_Size_mm_midpoint', 'Density_midpoint'] if col not in df_raw.columns]
+            if missing_columns:
+                st.warning(f"Missing columns: {', '.join(missing_columns)}. These columns will not be processed for outlier handling.")
+
             # Handle outliers in the numerical columns
             numerical_cols = ['MP_Count_per_L', 'Risk_Score', 'Microplastic_Size_mm_midpoint', 'Density_midpoint']
             
