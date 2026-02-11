@@ -107,6 +107,19 @@ def encode_categorical(df, categorical_cols):
     df_encoded = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
     return df_encoded
 
+def scale_features(df, numerical_cols):
+    """Scale numerical features using StandardScaler."""
+    scaler = StandardScaler()
+    df[numerical_cols] = scaler.fit_transform(df[numerical_cols])
+    return df, scaler
+
+def transform_skewed_columns(df, numerical_cols, threshold=0.5):
+    """Transform skewed columns by applying log transformation."""
+    for col in numerical_cols:
+        if df[col].skew() > threshold:
+            df[col] = np.log1p(df[col])  # Apply log1p to handle skewed distributions
+    return df
+
 # -------------------------------------------------------
 # HOME PAGE
 # -------------------------------------------------------
@@ -236,9 +249,15 @@ def preprocessing_page():
     # Handle outliers using IQR method
     df_cleaned = handle_outliers_iqr(df_encoded, numerical_cols)
 
+    # Transform skewed columns (log transformation)
+    df_cleaned = transform_skewed_columns(df_cleaned, numerical_cols)
+
+    # Scale numerical features
+    df_scaled, scaler = scale_features(df_cleaned, numerical_cols)
+
     # Display descriptive statistics after outlier handling
-    st.write("Descriptive statistics after handling outliers:")
-    st.dataframe(df_cleaned[numerical_cols].describe())
+    st.write("Descriptive statistics after handling outliers and scaling:")
+    st.dataframe(df_scaled[numerical_cols].describe())
 
 # -------------------------------------------------------
 # MAIN APP
