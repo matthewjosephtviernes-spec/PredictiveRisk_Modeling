@@ -121,6 +121,9 @@ def home_page():
             st.write("Dataset uploaded successfully!")
             st.dataframe(df_raw.head())
 
+            # Store the dataframe in session state so it persists across pages
+            st.session_state.df = df_raw
+
             # Convert columns to numeric (if they are not already)
             df_raw = convert_to_numeric(df_raw, ['MP_Count_per_L', 'Risk_Score'])
 
@@ -202,37 +205,27 @@ def home_page():
 def preprocessing_page():
     st.title("Preprocessing and Outlier Handling")
 
-    # Handle file upload again for preprocessing
-    uploaded_file = st.file_uploader("Upload your dataset for Preprocessing (CSV)", type="csv")
+    # Retrieve the dataset from session state
+    if 'df' not in st.session_state:
+        st.warning("Please upload a dataset first on the Home page.")
+        return
 
-    if uploaded_file is not None:
-        try:
-            df_raw = load_data(uploaded_file)
-            st.write("Dataset uploaded successfully for Preprocessing!")
-            st.dataframe(df_raw.head())
+    df_raw = st.session_state.df
+    st.write("Dataset loaded for preprocessing:")
+    st.dataframe(df_raw.head())
 
-            # Check if the required columns exist in the dataset
-            missing_columns = [col for col in ['Microplastic_Size_mm_midpoint', 'Density_midpoint'] if col not in df_raw.columns]
-            if missing_columns:
-                st.warning(f"Missing columns: {', '.join(missing_columns)}. These columns will not be processed for outlier handling.")
+    # Handle outliers in the numerical columns
+    numerical_cols = ['MP_Count_per_L', 'Risk_Score', 'Microplastic_Size_mm_midpoint', 'Density_midpoint']
+    
+    # Convert columns to numeric (if they are not already)
+    df_raw = convert_to_numeric(df_raw, numerical_cols)
 
-            # Handle outliers in the numerical columns
-            numerical_cols = ['MP_Count_per_L', 'Risk_Score', 'Microplastic_Size_mm_midpoint', 'Density_midpoint']
-            
-            # Convert columns to numeric (if they are not already)
-            df_raw = convert_to_numeric(df_raw, numerical_cols)
+    # Handle outliers using IQR method
+    df_cleaned = handle_outliers_iqr(df_raw, numerical_cols)
 
-            # Handle outliers using IQR method
-            df_cleaned = handle_outliers_iqr(df_raw, numerical_cols)
-
-            # Display descriptive statistics after outlier handling
-            st.write("Descriptive statistics after handling outliers:")
-            st.dataframe(df_cleaned[numerical_cols].describe())
-                
-        except Exception as e:
-            st.error(f"Error loading file: {e}")
-    else:
-        st.write("No file uploaded yet for preprocessing. Please upload a CSV file to proceed.")
+    # Display descriptive statistics after outlier handling
+    st.write("Descriptive statistics after handling outliers:")
+    st.dataframe(df_cleaned[numerical_cols].describe())
 
 # -------------------------------------------------------
 # MAIN APP
