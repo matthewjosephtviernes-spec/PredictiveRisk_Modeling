@@ -50,6 +50,8 @@ CATEGORICAL_COLS = [
     "Salinity",
     "Industrial_Activity",
     "Population_Density",
+    "Risk_Type",
+    "Risk_Level",
     "Author",
     "Source",
 ]
@@ -99,6 +101,11 @@ def handle_outliers_iqr(df, numerical_cols):
         df[col] = df[col].clip(lower=lower_bound, upper=upper_bound)
 
     return df
+
+def encode_categorical(df, categorical_cols):
+    """Apply One-Hot Encoding to categorical columns."""
+    df_encoded = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
+    return df_encoded
 
 # -------------------------------------------------------
 # HOME PAGE
@@ -214,14 +221,20 @@ def preprocessing_page():
     st.write("Dataset loaded for preprocessing:")
     st.dataframe(df_raw.head())
 
+    # Encode categorical variables
+    st.subheader("Encoding Categorical Variables")
+    df_encoded = encode_categorical(df_raw, CATEGORICAL_COLS)
+    st.write("First few rows of the dataset after one-hot encoding:")
+    st.dataframe(df_encoded.head())
+
     # Handle outliers in the numerical columns
     numerical_cols = ['MP_Count_per_L', 'Risk_Score', 'Microplastic_Size_mm_midpoint', 'Density_midpoint']
     
     # Convert columns to numeric (if they are not already)
-    df_raw = convert_to_numeric(df_raw, numerical_cols)
+    df_encoded = convert_to_numeric(df_encoded, numerical_cols)
 
     # Handle outliers using IQR method
-    df_cleaned = handle_outliers_iqr(df_raw, numerical_cols)
+    df_cleaned = handle_outliers_iqr(df_encoded, numerical_cols)
 
     # Display descriptive statistics after outlier handling
     st.write("Descriptive statistics after handling outliers:")
