@@ -188,27 +188,46 @@ def home_page():
                         plt.tight_layout()
                         st.pyplot(plt)
 
-                # Preprocessing: Handle Outliers
-                st.subheader("Handling Outliers Using IQR Method")
-                numerical_cols = ['MP_Count_per_L', 'Risk_Score', 'Microplastic_Size_mm_midpoint', 'Density_midpoint']
-                
-                # Handle outliers in the numerical columns
-                df_cleaned = handle_outliers_iqr(df_raw, numerical_cols)
-
-                # Display descriptive statistics after outlier handling
-                st.write("Descriptive statistics after handling outliers:")
-                st.dataframe(df_cleaned[numerical_cols].describe())
-                
-            else:
-                st.warning("Columns 'Risk_Score' and 'MP_Count_per_L' are required in the dataset.")
-            
-            # Non-clickable Indicator to proceed to Preprocessing
-            st.subheader("You can proceed to the Preprocessing section.")
+                # Non-clickable Indicator to proceed to Preprocessing
+                st.subheader("You can proceed to the Preprocessing section.")
                 
         except Exception as e:
             st.error(f"Error loading file: {e}")
     else:
         st.write("No file uploaded yet. Please upload a CSV file to proceed.")
+
+# -------------------------------------------------------
+# PREPROCESSING PAGE
+# -------------------------------------------------------
+def preprocessing_page():
+    st.title("Preprocessing and Outlier Handling")
+
+    # Handle file upload again for preprocessing
+    uploaded_file = st.file_uploader("Upload your dataset for Preprocessing (CSV)", type="csv")
+
+    if uploaded_file is not None:
+        try:
+            df_raw = load_data(uploaded_file)
+            st.write("Dataset uploaded successfully for Preprocessing!")
+            st.dataframe(df_raw.head())
+
+            # Handle outliers in the numerical columns
+            numerical_cols = ['MP_Count_per_L', 'Risk_Score', 'Microplastic_Size_mm_midpoint', 'Density_midpoint']
+            
+            # Convert columns to numeric (if they are not already)
+            df_raw = convert_to_numeric(df_raw, numerical_cols)
+
+            # Handle outliers using IQR method
+            df_cleaned = handle_outliers_iqr(df_raw, numerical_cols)
+
+            # Display descriptive statistics after outlier handling
+            st.write("Descriptive statistics after handling outliers:")
+            st.dataframe(df_cleaned[numerical_cols].describe())
+                
+        except Exception as e:
+            st.error(f"Error loading file: {e}")
+    else:
+        st.write("No file uploaded yet for preprocessing. Please upload a CSV file to proceed.")
 
 # -------------------------------------------------------
 # MAIN APP
@@ -224,18 +243,19 @@ def main():
         home_page()
 
     elif page == "🧼 Preprocessing":
-        st.title("Preprocessing Page")
-        data = pd.read_csv("your_dataset.csv")  # Replace with your dataset
-        st.dataframe(data.head())
+        preprocessing_page()
 
     elif page == "🧠 Feature Selection & Relevance":
-        feature_selection_page(data)
+        st.title("Feature Selection & Relevance")
+        st.write("Feature selection content goes here...")
 
     elif page == "⚙️ Modeling":
-        modeling_page(data)
+        st.title("Modeling")
+        st.write("Modeling content goes here...")
 
     elif page == "📊 Cross Validation":
-        cross_validation_page(data)
+        st.title("Cross Validation")
+        st.write("Cross-validation content goes here...")
 
 if __name__ == "__main__":
     main()
