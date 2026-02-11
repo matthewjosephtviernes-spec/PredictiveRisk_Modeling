@@ -275,6 +275,10 @@ def preprocessing_page():
     # Scale numerical features
     df_scaled, scaler = scale_features(df_cleaned, numerical_cols)
 
+    # Show scaled features
+    st.subheader("Scaled Features (after applying StandardScaler)")
+    st.dataframe(df_scaled.head())
+
     # Display descriptive statistics after outlier handling
     st.write("Descriptive statistics after handling outliers and scaling:")
     st.dataframe(df_scaled[numerical_cols].describe())
