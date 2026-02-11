@@ -6,6 +6,56 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pandas.errors import EmptyDataError, ParserError
 
+from sklearn.model_selection import train_test_split, KFold, StratifiedKFold, GridSearchCV
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelEncoder
+from sklearn.impute import SimpleImputer
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.feature_selection import mutual_info_classif, chi2
+
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn.preprocessing._encoders")
+
+# Optional: SMOTE
+try:
+    from imblearn.over_sampling import SMOTE
+    from imblearn.pipeline import Pipeline as ImbPipeline
+    IMBLEARN_OK = True
+except Exception:
+    IMBLEARN_OK = False
+
+# -------------------------------------------------------
+# CONSTANTS
+# -------------------------------------------------------
+TARGET_RISK_TYPE = "Risk_Type"
+TARGET_RISK_LEVEL = "Risk_Level"
+
+NUMERIC_COLS = [
+    "MP_Count_per_L",
+    "Risk_Score",
+    "Microplastic_Size_mm_midpoint",
+    "Density_midpoint",
+]
+
+CATEGORICAL_COLS = [
+    "Location",
+    "Shape",
+    "Polymer_Type",
+    "pH",
+    "Salinity",
+    "Industrial_Activity",
+    "Population_Density",
+    "Author",
+    "Source",
+]
+
+DEFAULT_MODEL_DROP_COLS = ["Location", "Author"]
+
 # -------------------------------------------------------
 # LOADING + CLEANING
 # -------------------------------------------------------
@@ -33,6 +83,21 @@ def convert_to_numeric(df, columns):
     """Convert specified columns to numeric, coercing errors to NaN."""
     for col in columns:
         df[col] = pd.to_numeric(df[col], errors='coerce')
+    return df
+
+def handle_outliers_iqr(df, numerical_cols):
+    """Handle outliers using the IQR method (capping)."""
+    for col in numerical_cols:
+        Q1 = df[col].quantile(0.25)
+        Q3 = df[col].quantile(0.75)
+        IQR = Q3 - Q1
+
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+
+        # Cap the outliers
+        df[col] = df[col].clip(lower=lower_bound, upper=upper_bound)
+
     return df
 
 # -------------------------------------------------------
@@ -122,6 +187,17 @@ def home_page():
                         plt.xticks(rotation=45, ha='right')
                         plt.tight_layout()
                         st.pyplot(plt)
+
+                # Preprocessing: Handle Outliers
+                st.subheader("Handling Outliers Using IQR Method")
+                numerical_cols = ['MP_Count_per_L', 'Risk_Score', 'Microplastic_Size_mm_midpoint', 'Density_midpoint']
+                
+                # Handle outliers in the numerical columns
+                df_cleaned = handle_outliers_iqr(df_raw, numerical_cols)
+
+                # Display descriptive statistics after outlier handling
+                st.write("Descriptive statistics after handling outliers:")
+                st.dataframe(df_cleaned[numerical_cols].describe())
                 
             else:
                 st.warning("Columns 'Risk_Score' and 'MP_Count_per_L' are required in the dataset.")
