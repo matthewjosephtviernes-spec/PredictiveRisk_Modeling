@@ -174,6 +174,9 @@ def home_page():
             # Convert columns to numeric (if they are not already)
             df_raw = convert_to_numeric(df_raw, ['MP_Count_per_L', 'Risk_Score'])
 
+            # Store the content for Home Page in session state
+            st.session_state.home_content = df_raw
+
             # EDA Visualizations (after dataset upload)
             st.subheader("Exploratory Data Analysis (EDA)")
             
@@ -252,9 +255,6 @@ def home_page():
 def preprocessing_page():
     st.title("Preprocessing")
 
-    # Create tabs for better navigation
-    tab = st.radio("Choose a Preprocessing Step", ['Encoding Categorical Variables', 'Skewness Calculation', 'Outlier Handling and Scaling'])
-
     # Retrieve the dataset from session state
     if 'df' not in st.session_state:
         st.warning("Please upload a dataset first on the Home page.")
@@ -263,48 +263,42 @@ def preprocessing_page():
     df_raw = st.session_state.df
 
     # Encoding Categorical Variables Tab
-    if tab == 'Encoding Categorical Variables':
-        st.subheader("Encoding Categorical Variables")
-        df_encoded = encode_categorical(df_raw, CATEGORICAL_COLS)
-        st.write("First few rows after One-Hot Encoding:")
-        st.dataframe(df_encoded.head())
+    st.subheader("Encoding Categorical Variables")
+    df_encoded = encode_categorical(df_raw, CATEGORICAL_COLS)
+    st.write("First few rows after One-Hot Encoding:")
+    st.dataframe(df_encoded.head())
 
-    # Skewness Calculation Tab
-    elif tab == 'Skewness Calculation':
-        st.subheader("Skewness Before and After Log Transformation")
-        df_encoded, skewness_before, skewness_after = transform_skewed_columns(df_raw, NUMERIC_COLS, threshold=0.5)
+    # Handle outliers in the numerical columns (only columns that exist)
+    numerical_cols = ['MP_Count_per_L', 'Risk_Score', 'Microplastic_Size_mm', 'Density']
+    
+    # Convert columns to numeric (if they are not already)
+    df_encoded = convert_to_numeric(df_encoded, numerical_cols)
 
-        # Display skewness before and after transformation
-        skewness_df = pd.DataFrame({
-            'Column': skewness_before.index,
-            'Skewness Before': skewness_before.values,
-            'Skewness After': skewness_after.values
-        })
-        st.dataframe(skewness_df)
+    # Handle outliers using IQR method for existing columns
+    df_cleaned = handle_outliers_iqr(df_encoded, numerical_cols)
 
-    # Outlier Handling and Scaling Tab
-    elif tab == 'Outlier Handling and Scaling':
-        st.subheader("Outlier Handling and Feature Scaling")
+    # Transform skewed columns (log transformation)
+    df_cleaned, skewness_before, skewness_after = transform_skewed_columns(df_cleaned, numerical_cols)
 
-        # Handle outliers in the numerical columns (only columns that exist)
-        numerical_cols = ['MP_Count_per_L', 'Risk_Score', 'Microplastic_Size_mm', 'Density']
-        
-        # Convert columns to numeric (if they are not already)
-        df_encoded = convert_to_numeric(df_raw, numerical_cols)
+    # Display skewness before and after transformation
+    st.write("Skewness of numerical columns before and after log transformation:")
+    skewness_df = pd.DataFrame({
+        'Column': skewness_before.index,
+        'Skewness Before': skewness_before.values,
+        'Skewness After': skewness_after.values
+    })
+    st.dataframe(skewness_df)
 
-        # Handle outliers using IQR method for existing columns
-        df_cleaned = handle_outliers_iqr(df_encoded, numerical_cols)
+    # Scale numerical features
+    df_scaled, scaler = scale_features(df_cleaned, numerical_cols)
 
-        # Scale numerical features
-        df_scaled, scaler = scale_features(df_cleaned, numerical_cols)
+    # Show scaled features
+    st.subheader("Scaled Features (after applying StandardScaler)")
+    st.dataframe(df_scaled.head())
 
-        # Show scaled features
-        st.subheader("Scaled Features (after applying StandardScaler)")
-        st.dataframe(df_scaled.head())
-
-        # Display descriptive statistics after outlier handling
-        st.write("Descriptive statistics after handling outliers and scaling:")
-        st.dataframe(df_scaled[numerical_cols].describe())
+    # Display descriptive statistics after outlier handling
+    st.write("Descriptive statistics after handling outliers and scaling:")
+    st.dataframe(df_scaled[numerical_cols].describe())
 
 # -------------------------------------------------------
 # MAIN APP
