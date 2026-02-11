@@ -105,7 +105,7 @@ def home_page():
             # EDA Visualizations (after dataset upload)
             st.subheader("Exploratory Data Analysis (EDA)")
             
-            if "Risk_Score" in df_raw.columns:
+            if "Risk_Score" in df_raw.columns and "Risk_Level" in df_raw.columns:
                 # Create a toggle for the Distribution of Risk Score
                 with st.expander('Distribution of Risk Score'):
                     plt.figure(figsize=(10, 6))
@@ -133,8 +133,32 @@ def home_page():
                     plt.grid(True)
                     st.pyplot(plt)
                 
+                # Create a toggle for the Box Plot or Violin Plot of Risk_Score by Risk_Level
+                with st.expander('Risk Score Distribution by Risk Level'):
+                    plot_type = st.radio('Select Plot Type', ['Box Plot', 'Violin Plot'], index=0)
+
+                    if plot_type == 'Box Plot':
+                        plt.figure(figsize=(12, 8))
+                        sns.boxplot(data=df_raw, x='Risk_Level', y='Risk_Score')
+                        plt.title('Risk Score Distribution by Risk Level')
+                        plt.xlabel('Risk Level')
+                        plt.ylabel('Risk Score')
+                        plt.xticks(rotation=45, ha='right')
+                        plt.tight_layout()
+                        st.pyplot(plt)
+
+                    elif plot_type == 'Violin Plot':
+                        plt.figure(figsize=(12, 8))
+                        sns.violinplot(data=df_raw, x='Risk_Level', y='Risk_Score')
+                        plt.title('Risk Score Distribution by Risk Level')
+                        plt.xlabel('Risk Level')
+                        plt.ylabel('Risk Score')
+                        plt.xticks(rotation=45, ha='right')
+                        plt.tight_layout()
+                        st.pyplot(plt)
+                
             else:
-                st.warning("No 'Risk_Score' column found in the dataset.")
+                st.warning("Columns 'Risk_Score' and 'Risk_Level' are required in the dataset.")
                 
         except Exception as e:
             st.error(f"Error loading file: {e}")
