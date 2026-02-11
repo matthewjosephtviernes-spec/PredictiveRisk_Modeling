@@ -106,32 +106,32 @@ def home_page():
             st.subheader("Exploratory Data Analysis (EDA)")
             
             if "Risk_Score" in df_raw.columns:
-                # Create a histogram of the Risk_Score column
-                st.subheader('Distribution of Risk Score')
-                plt.figure(figsize=(10, 6))
-                sns.histplot(data=df_raw, x='Risk_Score', kde=True, bins=30)
-                plt.title('Distribution of Risk Score')
-                plt.xlabel('Risk Score')
-                plt.ylabel('Frequency')
-                st.pyplot(plt)
+                # Create a toggle for the Distribution of Risk Score
+                with st.expander('Distribution of Risk Score'):
+                    plt.figure(figsize=(10, 6))
+                    sns.histplot(data=df_raw, x='Risk_Score', kde=True, bins=30)
+                    plt.title('Distribution of Risk Score')
+                    plt.xlabel('Risk Score')
+                    plt.ylabel('Frequency')
+                    st.pyplot(plt)
 
-                # Create a box plot of the Risk_Score column
-                st.subheader('Box Plot of Risk Score')
-                plt.figure(figsize=(10, 6))
-                sns.boxplot(data=df_raw, y='Risk_Score')
-                plt.title('Box Plot of Risk Score')
-                plt.ylabel('Risk Score')
-                st.pyplot(plt)
-                
-                # Create a scatter plot to visualize the relationship between MP_Count_per_L and Risk_Score
-                st.subheader('Relationship between MP Count per L and Risk Score')
-                plt.figure(figsize=(10, 6))
-                sns.scatterplot(data=df_raw, x='MP_Count_per_L', y='Risk_Score')
-                plt.title('Relationship between MP Count per L and Risk Score')
-                plt.xlabel('MP Count per L')
-                plt.ylabel('Risk Score')
-                plt.grid(True)
-                st.pyplot(plt)
+                # Create a toggle for the Box Plot of Risk Score
+                with st.expander('Box Plot of Risk Score'):
+                    plt.figure(figsize=(10, 6))
+                    sns.boxplot(data=df_raw, y='Risk_Score')
+                    plt.title('Box Plot of Risk Score')
+                    plt.ylabel('Risk Score')
+                    st.pyplot(plt)
+
+                # Create a toggle for the scatter plot of Risk_Score and MP_Count_per_L
+                with st.expander('Relationship between MP Count per L and Risk Score'):
+                    plt.figure(figsize=(10, 6))
+                    sns.scatterplot(data=df_raw, x='MP_Count_per_L', y='Risk_Score')
+                    plt.title('Relationship between MP Count per L and Risk Score')
+                    plt.xlabel('MP Count per L')
+                    plt.ylabel('Risk Score')
+                    plt.grid(True)
+                    st.pyplot(plt)
                 
             else:
                 st.warning("No 'Risk_Score' column found in the dataset.")
