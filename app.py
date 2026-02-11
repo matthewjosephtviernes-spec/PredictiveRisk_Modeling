@@ -42,6 +42,7 @@ NUMERIC_COLS = [
     "Density_midpoint",
 ]
 
+# Removed 'Source' column
 CATEGORICAL_COLS = [
     "Location",
     "Shape",
@@ -53,7 +54,6 @@ CATEGORICAL_COLS = [
     "Risk_Type",
     "Risk_Level",
     "Author",
-    "Source",
 ]
 
 DEFAULT_MODEL_DROP_COLS = ["Location", "Author"]
@@ -104,7 +104,14 @@ def handle_outliers_iqr(df, numerical_cols):
 
 def encode_categorical(df, categorical_cols):
     """Apply One-Hot Encoding to categorical columns."""
-    df_encoded = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
+    # Check which columns are present in the DataFrame
+    existing_cols = [col for col in categorical_cols if col in df.columns]
+    
+    if len(existing_cols) != len(categorical_cols):
+        missing_cols = list(set(categorical_cols) - set(existing_cols))
+        st.warning(f"Missing columns for encoding: {', '.join(missing_cols)}")
+
+    df_encoded = pd.get_dummies(df, columns=existing_cols, drop_first=True)
     return df_encoded
 
 def scale_features(df, numerical_cols):
