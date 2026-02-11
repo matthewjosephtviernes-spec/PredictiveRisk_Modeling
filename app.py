@@ -159,6 +159,12 @@ def home_page():
                 
             else:
                 st.warning("Columns 'Risk_Score' and 'Risk_Level' are required in the dataset.")
+            
+            # Indicator to proceed to Preprocessing
+            st.subheader("Ready to proceed to Preprocessing?")
+            if st.button('Go to Preprocessing'):
+                st.session_state.page = "🧼 Preprocessing"
+                st.experimental_rerun()
                 
         except Exception as e:
             st.error(f"Error loading file: {e}")
@@ -169,6 +175,9 @@ def home_page():
 # MAIN APP
 # -------------------------------------------------------
 def main():
+    if "page" not in st.session_state:
+        st.session_state.page = "🏠 Home"
+        
     st.sidebar.title("Navigation")
     page = st.sidebar.radio("Go to", ("🏠 Home", "🧼 Preprocessing", "🧠 Feature Selection & Relevance", "⚙️ Modeling", "📊 Cross Validation"))
 
