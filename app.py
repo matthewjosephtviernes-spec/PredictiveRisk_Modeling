@@ -123,6 +123,16 @@ def home_page():
                 plt.ylabel('Risk Score')
                 st.pyplot(plt)
                 
+                # Create a scatter plot to visualize the relationship between MP_Count_per_L and Risk_Score
+                st.subheader('Relationship between MP Count per L and Risk Score')
+                plt.figure(figsize=(10, 6))
+                sns.scatterplot(data=df_raw, x='MP_Count_per_L', y='Risk_Score')
+                plt.title('Relationship between MP Count per L and Risk Score')
+                plt.xlabel('MP Count per L')
+                plt.ylabel('Risk Score')
+                plt.grid(True)
+                st.pyplot(plt)
+                
             else:
                 st.warning("No 'Risk_Score' column found in the dataset.")
                 
