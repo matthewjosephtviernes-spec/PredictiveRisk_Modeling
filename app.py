@@ -234,7 +234,7 @@ def home_page():
 # PREPROCESSING PAGE
 # -------------------------------------------------------
 def preprocessing_page():
-    st.title("Preprocessing and Outlier Handling")
+    st.title("Preprocessing")
 
     # Retrieve the dataset from session state
     if 'df' not in st.session_state:
@@ -242,14 +242,10 @@ def preprocessing_page():
         return
 
     df_raw = st.session_state.df
-    st.write("Dataset loaded for preprocessing:")
-    st.dataframe(df_raw.head())
 
     # Encode categorical variables
     st.subheader("Encoding Categorical Variables")
     df_encoded = encode_categorical(df_raw, CATEGORICAL_COLS)
-    st.write("First few rows of the dataset after one-hot encoding:")
-    st.dataframe(df_encoded.head())
 
     # Handle outliers in the numerical columns (only columns that exist)
     numerical_cols = ['MP_Count_per_L', 'Risk_Score', 'Microplastic_Size_mm', 'Density']
