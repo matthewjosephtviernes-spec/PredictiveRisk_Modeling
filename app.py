@@ -116,6 +116,14 @@ def encode_categorical(df, categorical_cols):
         st.warning(f"Missing columns for encoding: {', '.join(missing_cols)}")
 
     df_encoded = pd.get_dummies(df, columns=existing_cols, drop_first=True)
+
+    # Label Encoding for the target columns (Risk_Type, Risk_Level)
+    label_encoder = LabelEncoder()
+    if 'Risk_Type' in df_encoded.columns:
+        df_encoded['Risk_Type'] = label_encoder.fit_transform(df_encoded['Risk_Type'])
+    if 'Risk_Level' in df_encoded.columns:
+        df_encoded['Risk_Level'] = label_encoder.fit_transform(df_encoded['Risk_Level'])
+
     return df_encoded
 
 def scale_features(df, numerical_cols):
