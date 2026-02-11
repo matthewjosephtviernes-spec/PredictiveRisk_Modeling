@@ -115,6 +115,7 @@ def encode_categorical(df, categorical_cols):
         missing_cols = list(set(categorical_cols) - set(existing_cols))
         st.warning(f"Missing columns for encoding: {', '.join(missing_cols)}")
 
+    # Apply One-Hot Encoding
     df_encoded = pd.get_dummies(df, columns=existing_cols, drop_first=True)
 
     # Label Encoding for the target columns (Risk_Type, Risk_Level)
@@ -254,6 +255,10 @@ def preprocessing_page():
     # Encode categorical variables
     st.subheader("Encoding Categorical Variables")
     df_encoded = encode_categorical(df_raw, CATEGORICAL_COLS)
+
+    # Show the result of categorical encoding (One-Hot Encoding)
+    st.write("First few rows after One-Hot Encoding:")
+    st.dataframe(df_encoded.head())
 
     # Handle outliers in the numerical columns (only columns that exist)
     numerical_cols = ['MP_Count_per_L', 'Risk_Score', 'Microplastic_Size_mm', 'Density']
