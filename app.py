@@ -101,6 +101,31 @@ def home_page():
             df_raw = load_data(uploaded_file)
             st.write("Dataset uploaded successfully!")
             st.dataframe(df_raw.head())
+            
+            # EDA Visualizations (after dataset upload)
+            st.subheader("Exploratory Data Analysis (EDA)")
+            
+            if "Risk_Score" in df_raw.columns:
+                # Create a histogram of the Risk_Score column
+                st.subheader('Distribution of Risk Score')
+                plt.figure(figsize=(10, 6))
+                sns.histplot(data=df_raw, x='Risk_Score', kde=True, bins=30)
+                plt.title('Distribution of Risk Score')
+                plt.xlabel('Risk Score')
+                plt.ylabel('Frequency')
+                st.pyplot(plt)
+
+                # Create a box plot of the Risk_Score column
+                st.subheader('Box Plot of Risk Score')
+                plt.figure(figsize=(10, 6))
+                sns.boxplot(data=df_raw, y='Risk_Score')
+                plt.title('Box Plot of Risk Score')
+                plt.ylabel('Risk Score')
+                st.pyplot(plt)
+                
+            else:
+                st.warning("No 'Risk_Score' column found in the dataset.")
+                
         except Exception as e:
             st.error(f"Error loading file: {e}")
     else:
