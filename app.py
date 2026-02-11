@@ -160,11 +160,8 @@ def home_page():
             else:
                 st.warning("Columns 'Risk_Score' and 'Risk_Level' are required in the dataset.")
             
-            # Indicator to proceed to Preprocessing
-            st.subheader("Ready to proceed to Preprocessing?")
-            if st.button('Go to Preprocessing'):
-                st.session_state.page = "🧼 Preprocessing"
-                st.experimental_rerun()
+            # Non-clickable Indicator to proceed to Preprocessing
+            st.subheader("You can proceed to the Preprocessing section.")
                 
         except Exception as e:
             st.error(f"Error loading file: {e}")
