@@ -23,7 +23,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="sklearn.preproce
 
 # Optional: SMOTE
 try:
-    from imblearn.over_sampling import SMOTE
+    from imblearn.oversampling import SMOTE
     from imblearn.pipeline import Pipeline as ImbPipeline
     IMBLEARN_OK = True
 except Exception:
@@ -38,8 +38,8 @@ TARGET_RISK_LEVEL = "Risk_Level"
 NUMERIC_COLS = [
     "MP_Count_per_L",
     "Risk_Score",
-    "Microplastic_Size_mm_midpoint",
-    "Density_midpoint",
+    "Microplastic_Size_mm",  # Replaced 'Microplastic_Size_mm_midpoint' with available column
+    "Density",  # Replaced 'Density_midpoint' with available column
 ]
 
 CATEGORICAL_COLS = [
@@ -251,13 +251,13 @@ def preprocessing_page():
     st.write("First few rows of the dataset after one-hot encoding:")
     st.dataframe(df_encoded.head())
 
-    # Handle outliers in the numerical columns
-    numerical_cols = ['MP_Count_per_L', 'Risk_Score', 'Microplastic_Size_mm_midpoint', 'Density_midpoint']
+    # Handle outliers in the numerical columns (only columns that exist)
+    numerical_cols = ['MP_Count_per_L', 'Risk_Score', 'Microplastic_Size_mm', 'Density']
     
     # Convert columns to numeric (if they are not already)
     df_encoded = convert_to_numeric(df_encoded, numerical_cols)
 
-    # Handle outliers using IQR method
+    # Handle outliers using IQR method for existing columns
     df_cleaned = handle_outliers_iqr(df_encoded, numerical_cols)
 
     # Transform skewed columns (log transformation)
