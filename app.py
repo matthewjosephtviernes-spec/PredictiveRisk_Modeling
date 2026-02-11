@@ -105,7 +105,7 @@ def home_page():
             # EDA Visualizations (after dataset upload)
             st.subheader("Exploratory Data Analysis (EDA)")
             
-            if "Risk_Score" in df_raw.columns and "Risk_Level" in df_raw.columns:
+            if "Risk_Score" in df_raw.columns and "MP_Count_per_L" in df_raw.columns:
                 # Create a toggle for the Distribution of Risk Score
                 with st.expander('Distribution of Risk Score'):
                     plt.figure(figsize=(10, 6))
@@ -126,13 +126,22 @@ def home_page():
                 # Create a toggle for the scatter plot of Risk_Score and MP_Count_per_L
                 with st.expander('Relationship between MP Count per L and Risk Score'):
                     plt.figure(figsize=(10, 6))
-                    sns.scatterplot(data=df_raw, x='MP_Count_per_L', y='Risk_Score')
+                    
+                    # Apply log transformation to reduce scale differences if necessary
+                    df_raw['Log_MP_Count_per_L'] = np.log1p(df_raw['MP_Count_per_L'])
+                    df_raw['Log_Risk_Score'] = np.log1p(df_raw['Risk_Score'])
+                    
+                    # Scatter plot with transparency (alpha) for better visibility
+                    sns.scatterplot(data=df_raw, x='Log_MP_Count_per_L', y='Log_Risk_Score', alpha=0.6)
+                    
+                    # Customize plot appearance
                     plt.title('Relationship between MP Count per L and Risk Score')
-                    plt.xlabel('MP Count per L')
-                    plt.ylabel('Risk Score')
-                    plt.grid(True)
+                    plt.xlabel('Log of MP Count per L')
+                    plt.ylabel('Log of Risk Score')
+                    plt.grid(True, linestyle='--', alpha=0.6)
+                    plt.tight_layout()
                     st.pyplot(plt)
-                
+
                 # Create a toggle for the Box Plot or Violin Plot of Risk_Score by Risk_Level
                 with st.expander('Risk Score Distribution by Risk Level'):
                     plot_type = st.radio('Select Plot Type', ['Box Plot', 'Violin Plot'], index=0)
@@ -158,7 +167,7 @@ def home_page():
                         st.pyplot(plt)
                 
             else:
-                st.warning("Columns 'Risk_Score' and 'Risk_Level' are required in the dataset.")
+                st.warning("Columns 'Risk_Score' and 'MP_Count_per_L' are required in the dataset.")
             
             # Non-clickable Indicator to proceed to Preprocessing
             st.subheader("You can proceed to the Preprocessing section.")
